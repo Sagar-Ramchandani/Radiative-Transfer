@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 PLANCK=6.626e-34
 BOLTZMANN=1.38e-23
 C=3e8
+PARSEC=3.0857e16
 dustDensity=1e-17
 
 def readKappaData(fileName):
@@ -67,25 +68,53 @@ def getKappaV(freqs):
             pos+=1
     return (kappaV,nu,kappaNu)
 
-def RungeKuttaOrder4(f,g,yi,xi,h):
-    k1=-f(xi)*yi+g(xi)
-    k2=-f(xi+h/2)*(yi+h*k1/2)+g(xi+h/2)
-    k3=-f(xi+h/2)*(yi+h*k2/2)+g(xi+h/2)
-    k4=-f(xi+h)*(yi+h*k3)+g(xi+h)
-    y=yi+(h/6)*(k1+2*k2+2*k3+k4)
+def RungeKuttaOrder4(alpha,j,I,h):
+    #We assume that alpha and j remain constant throughout the cloud
+    k1=-alpha*I+j
+    k2=-alpha*(I+h*k1/2)+j
+    k3=-alpha*(I+h*k2/2)+j
+    k4=-alpha*(I+h*k3)+j
+    y=I+(h/6)*(k1+2*k2+2*k3+k4)
     return y
 
-sampleNumber=101
+def gasCloud(I,alphaV,jV,sampleNumber,steps):
+    L=0.01*PARSEC
+    specificIntensities=[I.copy()]
+    for i in range(steps):
+        for j in range(sampleNumber):
+            I[j]=RungeKuttaOrder4(alphaV[j],jV[j],I[j],L/steps)
+        specificIntensities.append(I.copy())
+    return specificIntensities
 
-freqs=randomLogSpace(1e13,2*1e15,sampleNumber)
-IV=specificIntensity(PLANCK,BOLTZMANN,5777,freqs,C)
+def workLoop(sampleNumber,integrationSteps,Plot=True):
 
-jV=np.zeros(len(freqs))
-kappaV,nu,kappaNu=getKappaV(freqs)
+    freqs=randomLogSpace(1e13,2*1e15,sampleNumber)
+    IV=specificIntensity(PLANCK,BOLTZMANN,5777,freqs,C)
 
-#Testing code to see if linear interpolation
-#of the random points gives similar plot as original
-plt.plot(freqs,kappaV)
-plt.plot(nu,kappaNu)
+    jV=np.zeros(len(freqs))
+    kappaV,nu,kappaNu=getKappaV(freqs)
+    alphaV=list(map(lambda x: x*dustDensity,kappaV))
+
+    IVTime=gasCloud(IV.copy(),alphaV,jV,sampleNumber,integrationSteps)
+
+    if Plot:
+        plt.plot(freqs,IV)
+        plt.plot(freqs,IVTime[len(IVTime)-1])
+        plt.show()
+
+    return (IVTime,freqs)
+
+workLoop(101,5)
+IVTime,freqs=workLoop(101,5,Plot=False)
+V1=10
+V2=90
+IV1=[]
+IV2=[]
+for t in range(5+1):
+    IV1.append(IVTime[t][V1])
+    IV2.append(IVTime[t][V2])
+
+plt.plot(np.linspace(0,0.01*PARSEC,6),IV1)
+plt.plot(np.linspace(0,0.01*PARSEC,6),IV2)
+plt.legend([freqs[V1],freqs[V2]])
 plt.show()
-
